@@ -6,6 +6,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [status, setStatus] = useState("idle");
 
   useEffect(() => {
     fetch("/api/products")
@@ -19,24 +20,33 @@ export default function ProductsPage() {
   if (loading) return <p>Loading products...</p>;
 
   const handleSubmit = async (e) => {
+    setStatus("loading");
+
     e.preventDefault();
     const form = new FormData(e.target);
     const data = Object.fromEntries(form.entries());
 
-    if (editingProduct) {
-      // Update existing product
-      await fetch(`/api/products/${editingProduct.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-    } else {
-      // Create new product
-      await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+    try {
+      if (editingProduct) {
+        await fetch(`/api/products/${editingProduct.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+      } else {
+        await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+      }
+
+      setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      console.error(err);
+    } finally {
+      setTimeout(() => setStatus("idle"), 1500);
     }
 
     const res = await fetch("/api/products");
