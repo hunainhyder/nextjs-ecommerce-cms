@@ -5,6 +5,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
 
   useEffect(() => {
     fetch("/api/products")
@@ -22,25 +23,47 @@ export default function ProductsPage() {
     const form = new FormData(e.target);
     const data = Object.fromEntries(form.entries());
 
-    await fetch("/api/products", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    setShowForm(false);
-    e.target.reset();
+    if (editingProduct) {
+      // Update existing product
+      await fetch(`/api/products/${editingProduct.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    } else {
+      // Create new product
+      await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    }
 
     const res = await fetch("/api/products");
-    const updated = await res.json();
-    setProducts(updated);
+    setProducts(await res.json());
+
+    setShowForm(false);
+    setEditingProduct(null);
+    e.target.reset();
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+
+    await fetch(`/api/products/${id}`, { method: "DELETE" });
+
+    const res = await fetch("/api/products");
+    setProducts(await res.json());
   };
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4">All Products</h2>
       <button
-        onClick={() => setShowForm(true)}
+        onClick={() => {
+          setEditingProduct(null);
+          setShowForm(true);
+        }}
         className="mb-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
         + Add Product
@@ -49,13 +72,18 @@ export default function ProductsPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="mb-6 bg-white p-4 rounded shadow-md"
+          className="mb-6 bg-white p-4 rounded shadow-md border"
         >
+          <h3 className="text-lg font-semibold mb-3">
+            {editingProduct ? "Edit Product" : "Add Product"}
+          </h3>
+
           <input
             type="text"
             name="name"
             placeholder="Name"
             required
+            defaultValue={editingProduct?.name || ""}
             className="border p-2 mr-2 rounded"
           />
           <input
@@ -63,19 +91,35 @@ export default function ProductsPage() {
             name="price"
             placeholder="Price"
             required
+            defaultValue={editingProduct?.price || ""}
             className="border p-2 mr-2 rounded"
           />
           <input
             type="number"
             name="stock"
             placeholder="Stock"
+            defaultValue={editingProduct?.stock || ""}
             className="border p-2 mr-2 rounded"
           />
+
           <button
             type="submit"
-            className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700"
+            className={`${
+              editingProduct ? "bg-blue-600" : "bg-green-600"
+            } text-white px-3 py-2 rounded hover:opacity-90`}
           >
-            Save
+            {editingProduct ? "Update" : "Save"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowForm(false);
+              setEditingProduct(null);
+            }}
+            className="ml-2 text-gray-600 hover:underline"
+          >
+            Cancel
           </button>
         </form>
       )}
@@ -98,10 +142,21 @@ export default function ProductsPage() {
               <td className="p-3">${p.price}</td>
               <td className="p-3">{p.stock}</td>
               <td className="p-3">
-                <button className="text-blue-600 hover:underline mr-3">
+                <button
+                  onClick={() => {
+                    setEditingProduct(p);
+                    setShowForm(true);
+                  }}
+                  className="text-blue-600 hover:underline mr-3"
+                >
                   Edit
                 </button>
-                <button className="text-red-600 hover:underline">Delete</button>
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}
