@@ -12,15 +12,21 @@ export async function GET(req, { params }) {
 }
 
 export async function PUT(req, { params }) {
-  const { id } = params;
+  const { id } = await params;
   const body = await req.json();
+
+  const data = {
+    ...body,
+    price: parseFloat(body.price),
+    stock: parseInt(body.stock, 10),
+  };
 
   const updated = await prisma.product.update({
     where: { id: Number(id) },
-    data: body,
+    data,
   });
 
-  return NextResponse.json(updated);
+  return Response.json(updated);
 }
 
 export async function DELETE(req, { params }) {
