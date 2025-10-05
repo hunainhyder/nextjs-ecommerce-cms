@@ -1,31 +1,37 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { writeFile } from "fs/promises";
+import path from "path";
 
 export async function GET() {
-  const products = await prisma.product.findMany();
-  return NextResponse.json(products);
+  const products = await prisma.product.findMany({
+    orderBy: { id: "desc" },
+  });
+  return Response.json(products);
 }
 
 export async function POST(req) {
-  const body = await req.json();
-  const { name, description, price, stock, image } = body;
+  const formData = await req.formData();
 
-  if (!name || !price) {
-    return NextResponse.json(
-      { error: "Name and price are required" },
-      { status: 400 }
-    );
+  const name = formData.get("name");
+  const price = parseFloat(formData.get("price"));
+  const stock = parseInt(formData.get("stock")) || 0;
+  const description = formData.get("description") || "";
+
+  let imageUrl = null;
+  const file = formData.get("image");
+
+  if (file && file.name) {
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    const filename = `${Date.now()}-${file.name}`;
+    const filepath = path.join(process.cwd(), "public", "uploads", filename);
+    await writeFile(filepath, buffer);
+    imageUrl = `/uploads/${filename}`;
   }
 
   const newProduct = await prisma.product.create({
-    data: {
-      name,
-      description,
-      price: parseFloat(price),
-      stock: Number(stock) || 0,
-      image,
-    },
+    data: { name, price, stock, description, image_url: imageUrl },
   });
 
-  return NextResponse.json(newProduct, { status: 201 });
+  return Response.json(newProduct);
 }

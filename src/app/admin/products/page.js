@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -8,75 +7,63 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [status, setStatus] = useState("idle");
+  const [preview, setPreview] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/products");
-      const data = await res.json();
-      setProducts(data);
-    } catch (err) {
-      toast.error("Failed to fetch products");
-    } finally {
-      setLoading(false);
-    }
-  };
+  async function fetchProducts() {
+    const res = await fetch("/api/products");
+    const data = await res.json();
+    setProducts(data);
+    setLoading(false);
+  }
 
-  const handleSubmit = async (e) => {
+  function handleImageChange(e) {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
     setStatus("loading");
 
-    const form = new FormData(e.target);
-    const data = Object.fromEntries(form.entries());
-    data.price = parseFloat(data.price);
-    data.stock = parseInt(data.stock || "0", 10);
+    const formData = new FormData(e.target);
+    if (imageFile) formData.append("image", imageFile);
+
+    const method = editingProduct ? "PUT" : "POST";
+    const url = editingProduct
+      ? `/api/products/${editingProduct.id}`
+      : `/api/products`;
 
     try {
-      const res = await fetch(
-        editingProduct ? `/api/products/${editingProduct.id}` : "/api/products",
-        {
-          method: editingProduct ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!res.ok) throw new Error("Request failed");
-
-      toast.success(
-        editingProduct
-          ? "✅ Product updated successfully!"
-          : "🎉 Product added successfully!"
-      );
-
+      await fetch(url, { method, body: formData });
+      setStatus("success");
       await fetchProducts();
-      e.target.reset();
       setShowForm(false);
       setEditingProduct(null);
+      setPreview(null);
+      e.target.reset();
     } catch (err) {
       console.error(err);
-      toast.error("❌ Something went wrong while saving");
+      setStatus("error");
     } finally {
-      setStatus("idle");
+      setTimeout(() => setStatus("idle"), 1500);
     }
-  };
+  }
 
-  const handleDelete = async (id) => {
+  async function handleDelete(id) {
     if (!confirm("Are you sure you want to delete this product?")) return;
-    try {
-      await fetch(`/api/products/${id}`, { method: "DELETE" });
-      await fetchProducts();
-      toast.success("🗑️ Product deleted");
-    } catch {
-      toast.error("Failed to delete product");
-    }
-  };
+    await fetch(`/api/products/${id}`, { method: "DELETE" });
+    await fetchProducts();
+  }
 
-  if (loading) return <p className="text-center mt-10">Loading products...</p>;
+  if (loading) return <p>Loading products...</p>;
 
   return (
     <div>
@@ -101,58 +88,87 @@ export default function ProductsPage() {
             {editingProduct ? "Edit Product" : "Add Product"}
           </h3>
 
-          <div className="flex flex-wrap gap-2 mb-3">
+          <input
+            type="text"
+            name="name"
+            placeholder="Name"
+            required
+            defaultValue={editingProduct?.name || ""}
+            className="border p-2 mr-2 rounded w-full mb-2"
+          />
+
+          <textarea
+            name="description"
+            placeholder="Description"
+            defaultValue={editingProduct?.description || ""}
+            className="border p-2 mr-2 rounded w-full mb-2"
+          ></textarea>
+
+          <input
+            type="number"
+            name="price"
+            placeholder="Price"
+            required
+            defaultValue={editingProduct?.price || ""}
+            className="border p-2 mr-2 rounded w-full mb-2"
+          />
+
+          <input
+            type="number"
+            name="stock"
+            placeholder="Stock"
+            defaultValue={editingProduct?.stock || ""}
+            className="border p-2 mr-2 rounded w-full mb-2"
+          />
+
+          <div className="mb-3">
             <input
-              type="text"
-              name="name"
-              placeholder="Name"
-              required
-              defaultValue={editingProduct?.name || ""}
-              className="border p-2 rounded w-full sm:w-auto flex-1"
+              type="file"
+              name="image"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="mb-2"
             />
-            <input
-              type="number"
-              name="price"
-              placeholder="Price"
-              required
-              defaultValue={editingProduct?.price || ""}
-              className="border p-2 rounded w-full sm:w-auto flex-1"
-            />
-            <input
-              type="number"
-              name="stock"
-              placeholder="Stock"
-              defaultValue={editingProduct?.stock || ""}
-              className="border p-2 rounded w-full sm:w-auto flex-1"
-            />
+            {preview && (
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-32 h-32 object-cover rounded"
+              />
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={status === "loading"}
-              className={`${
-                editingProduct ? "bg-blue-600" : "bg-green-600"
-              } text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-50`}
-            >
-              {status === "loading"
-                ? "Saving..."
-                : editingProduct
-                ? "Update"
-                : "Save"}
-            </button>
+          <button
+            type="submit"
+            className={`${
+              editingProduct ? "bg-blue-600" : "bg-green-600"
+            } text-white px-3 py-2 rounded hover:opacity-90`}
+          >
+            {status === "loading"
+              ? "Saving..."
+              : editingProduct
+              ? "Update"
+              : "Save"}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                setEditingProduct(null);
-              }}
-              className="text-gray-600 hover:underline"
-            >
-              Cancel
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowForm(false);
+              setEditingProduct(null);
+              setPreview(null);
+            }}
+            className="ml-2 text-gray-600 hover:underline"
+          >
+            Cancel
+          </button>
+
+          {status === "success" && (
+            <p className="text-green-600 mt-2">✅ Saved successfully!</p>
+          )}
+          {status === "error" && (
+            <p className="text-red-600 mt-2">❌ Something went wrong!</p>
+          )}
         </form>
       )}
 
@@ -160,6 +176,7 @@ export default function ProductsPage() {
         <thead className="bg-gray-200">
           <tr>
             <th className="p-3 text-left">ID</th>
+            <th className="p-3 text-left">Image</th>
             <th className="p-3 text-left">Name</th>
             <th className="p-3 text-left">Price</th>
             <th className="p-3 text-left">Stock</th>
@@ -170,6 +187,15 @@ export default function ProductsPage() {
           {products.map((p) => (
             <tr key={p.id} className="border-b hover:bg-gray-50">
               <td className="p-3">{p.id}</td>
+              <td className="p-3">
+                {p.image_url && (
+                  <img
+                    src={p.image_url}
+                    alt={p.name}
+                    className="w-12 h-12 object-cover rounded"
+                  />
+                )}
+              </td>
               <td className="p-3">{p.name}</td>
               <td className="p-3">${p.price}</td>
               <td className="p-3">{p.stock}</td>
@@ -178,6 +204,7 @@ export default function ProductsPage() {
                   onClick={() => {
                     setEditingProduct(p);
                     setShowForm(true);
+                    setPreview(p.image_url || null);
                   }}
                   className="text-blue-600 hover:underline mr-3"
                 >
