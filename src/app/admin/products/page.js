@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -9,66 +10,78 @@ export default function ProductsPage() {
   const [status, setStatus] = useState("idle");
 
   useEffect(() => {
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then((data) => {
-        setProducts(data);
-        setLoading(false);
-      });
+    fetchProducts();
   }, []);
 
-  if (loading) return <p>Loading products...</p>;
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/products");
+      const data = await res.json();
+      setProducts(data);
+    } catch (err) {
+      toast.error("Failed to fetch products");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
+    e.preventDefault();
     setStatus("loading");
 
-    e.preventDefault();
     const form = new FormData(e.target);
     const data = Object.fromEntries(form.entries());
+    data.price = parseFloat(data.price);
+    data.stock = parseInt(data.stock || "0", 10);
 
     try {
-      if (editingProduct) {
-        await fetch(`/api/products/${editingProduct.id}`, {
-          method: "PUT",
+      const res = await fetch(
+        editingProduct ? `/api/products/${editingProduct.id}` : "/api/products",
+        {
+          method: editingProduct ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
-        });
-      } else {
-        await fetch("/api/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      }
+        }
+      );
 
-      setStatus("success");
+      if (!res.ok) throw new Error("Request failed");
+
+      toast.success(
+        editingProduct
+          ? "✅ Product updated successfully!"
+          : "🎉 Product added successfully!"
+      );
+
+      await fetchProducts();
+      e.target.reset();
+      setShowForm(false);
+      setEditingProduct(null);
     } catch (err) {
-      setStatus("error");
       console.error(err);
+      toast.error("❌ Something went wrong while saving");
     } finally {
-      setTimeout(() => setStatus("idle"), 1500);
+      setStatus("idle");
     }
-
-    const res = await fetch("/api/products");
-    setProducts(await res.json());
-
-    setShowForm(false);
-    setEditingProduct(null);
-    e.target.reset();
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
-
-    await fetch(`/api/products/${id}`, { method: "DELETE" });
-
-    const res = await fetch("/api/products");
-    setProducts(await res.json());
+    try {
+      await fetch(`/api/products/${id}`, { method: "DELETE" });
+      await fetchProducts();
+      toast.success("🗑️ Product deleted");
+    } catch {
+      toast.error("Failed to delete product");
+    }
   };
+
+  if (loading) return <p className="text-center mt-10">Loading products...</p>;
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4">All Products</h2>
+
       <button
         onClick={() => {
           setEditingProduct(null);
@@ -88,49 +101,58 @@ export default function ProductsPage() {
             {editingProduct ? "Edit Product" : "Add Product"}
           </h3>
 
-          <input
-            type="text"
-            name="name"
-            placeholder="Name"
-            required
-            defaultValue={editingProduct?.name || ""}
-            className="border p-2 mr-2 rounded"
-          />
-          <input
-            type="number"
-            name="price"
-            placeholder="Price"
-            required
-            defaultValue={editingProduct?.price || ""}
-            className="border p-2 mr-2 rounded"
-          />
-          <input
-            type="number"
-            name="stock"
-            placeholder="Stock"
-            defaultValue={editingProduct?.stock || ""}
-            className="border p-2 mr-2 rounded"
-          />
+          <div className="flex flex-wrap gap-2 mb-3">
+            <input
+              type="text"
+              name="name"
+              placeholder="Name"
+              required
+              defaultValue={editingProduct?.name || ""}
+              className="border p-2 rounded w-full sm:w-auto flex-1"
+            />
+            <input
+              type="number"
+              name="price"
+              placeholder="Price"
+              required
+              defaultValue={editingProduct?.price || ""}
+              className="border p-2 rounded w-full sm:w-auto flex-1"
+            />
+            <input
+              type="number"
+              name="stock"
+              placeholder="Stock"
+              defaultValue={editingProduct?.stock || ""}
+              className="border p-2 rounded w-full sm:w-auto flex-1"
+            />
+          </div>
 
-          <button
-            type="submit"
-            className={`${
-              editingProduct ? "bg-blue-600" : "bg-green-600"
-            } text-white px-3 py-2 rounded hover:opacity-90`}
-          >
-            {editingProduct ? "Update" : "Save"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={status === "loading"}
+              className={`${
+                editingProduct ? "bg-blue-600" : "bg-green-600"
+              } text-white px-4 py-2 rounded hover:opacity-90 disabled:opacity-50`}
+            >
+              {status === "loading"
+                ? "Saving..."
+                : editingProduct
+                ? "Update"
+                : "Save"}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setShowForm(false);
-              setEditingProduct(null);
-            }}
-            className="ml-2 text-gray-600 hover:underline"
-          >
-            Cancel
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setEditingProduct(null);
+              }}
+              className="text-gray-600 hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
